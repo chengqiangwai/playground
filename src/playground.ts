@@ -905,11 +905,35 @@ function constructInput(x: number, y: number): number[] {
   }
   return input;
 }
-
+function produceTrainData(){
+  let trainData = [];
+  let i = -20;
+  while(i < 20){
+    if(i < -1 || i > 1){
+        let j = +(20 / i + i * Math.random()).toFixed(2);
+        let j2 = +(-20 / i - i * Math.random()).toFixed(2);
+        trainData.push({
+          x: i,
+          y: j,
+          label: -1
+        },
+        {
+          x: i,
+          y: j2,
+          label: 1
+        })
+    }
+    i += +Math.random().toFixed(2);
+  }
+  return trainData;
+}
 function oneStep(): void {
   iter++;
+  console.log('trainData', trainData);
+  console.log('batchSize', state.batchSize,trainData.length)
   trainData.forEach((point, i) => {
     let input = constructInput(point.x, point.y);
+    console.log('input', input)
     nn.forwardProp(network, input);
     nn.backProp(network, point.label, nn.Errors.SQUARE);
     if ((i + 1) % state.batchSize === 0) {
@@ -934,6 +958,7 @@ export function getOutputWeights(network: nn.Node[][]): number[] {
       }
     }
   }
+  console.log('weights', weights)
   return weights;
 }
 

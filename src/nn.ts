@@ -251,6 +251,7 @@ export function buildNetwork(
  * @return The final output of the network.
  */
 export function forwardProp(network: Node[][], inputs: number[]): number {
+  // console.log('inputs: ', inputs);
   let inputLayer = network[0];
   if (inputs.length !== inputLayer.length) {
     throw new Error("The number of inputs must match the number of nodes in" +
