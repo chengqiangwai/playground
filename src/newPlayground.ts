@@ -96,23 +96,28 @@ let echartOption = {
   backgroundColor: BACKGROUND_COLOR,
   title: { text: 'BPNN' },
   grid: [
-    { width: '55%', height: '90%', top: 30, left: 30, },
-    { width: '30%', height: '20%', top: 30, right: 30, },
-    { width: '30%', height: '65%', top: '30%', right: 30 },
-  ],
+    { width: '55%', top: 30, left: 30, bottom: 30},
+    { width: '30%', height: 10, top: 30, right: 30, },
+    { width: '30%', height: '20%', top: 50, right: 30, },
+    
+    { width: '30%', height: '65%', bottom: 30, right: 30 },
+  ], // top: '35%'
   legend: {
     left: '50%',
+    data:['+1', '-1', 'lossTrain', 'lossTest']
   },
   trigger: 'item',
   xAxis: [
     { gridIndex: 0, },
-    { gridIndex: 1, min: 1 },
+    { gridIndex: 1, min: 0, show: false },
     { gridIndex: 2, },
+    { gridIndex: 3, },
   ],
   yAxis: [
     { gridIndex: 0, },
-    { gridIndex: 1, },
+    { gridIndex: 1, min: 1, max: 1, interval : 1, show: false},
     { gridIndex: 2, },
+    { gridIndex: 3, },
   ],
   series: []
 };
@@ -134,6 +139,7 @@ let lossProcess = {
   lossTest: [],
   lossTrain: []
 };
+let biggestLoss = 0;
 function reset(onStartup = false) {
   state.serialize();
   player.pause();
@@ -150,6 +156,7 @@ function reset(onStartup = false) {
     state.regularization, constructInputIds(), state.initZero);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
+  biggestLoss = lossTest > lossTrain ? lossTest: lossTrain;
   lossProcess.lossTest.push([iter, lossTest]);
   lossProcess.lossTrain.push([iter, lossTrain]);
 };
@@ -348,9 +355,10 @@ function drawLoss(lossProcess) {
     id: "lossTest",
     type: "line",
     smooth: true,
-    xAxisIndex: 1,
-    yAxisIndex: 1,
+    xAxisIndex: 2,
+    yAxisIndex: 2,
     data: lossProcess.lossTest,
+    symbolSize: 1,
     emphasis: {
       label: {
         show: true,
@@ -358,22 +366,26 @@ function drawLoss(lossProcess) {
         distance: 15,
         formatter: (params) => {
           let data = params.data;
-          return `Iter:${data[0]}\n\nTrain loss: ${data[1].toFixed(4)}`
+          return `Iter:${data[0]}\n\nTest loss: ${data[1].toFixed(4)}`
         },
-        color: 'blue',
+        color: 'rgb(251, 118, 123)',
         align: 'left'
       }
     },
-    tooltip: {
-      formatter: 'you are beautiful'
-    }
+    lineStyle: {
+      color: 'rgb(251, 118, 123)'
+    },
   };
   seriesInOption[2] = {
     id: "lossTrain",
     type: "line",
     smooth: true,
-    xAxisIndex: 1,
-    yAxisIndex: 1,
+    xAxisIndex: 2,
+    yAxisIndex: 2,
+    symbolSize:1,
+    lineStyle: {
+      color: 'rgb(129, 227, 238)'
+    },
     emphasis: {
       label: {
         show: true,
@@ -383,50 +395,78 @@ function drawLoss(lossProcess) {
           let data = params.data;
           return `Iter:${data[0]}\n\nTrain loss: ${data[1].toFixed(4)}`
         },
-        color: 'blue',
+        color: 'rgb(129, 227, 238)',
         align: 'left'
       }
-    },
-    label: {
-      show: true,
-        position: [-100, -50],
-        distance: 15,
-        formatter: (params) => {
-          let data = params.data;
-          console.log('hi')
-          if(params.dataIndex === lossProcess.lossTrain.length -1) {
-            return `Iter:${data[0]}\n\nTrain loss: ${data[1].toFixed(4)}`
-          }else{
-            return ''
-          }
-        },
-        color: 'blue',
-        align: 'left'
     },
     data: lossProcess.lossTrain
   }
 
-  let twoPoint = [
-    [iter, lossProcess.lossTest[0]]
+  let lossLegend = [
+    [0, 1, iter, 'Iter: '],
+    [4, 1, lossProcess.lossTest[iter - 1][1], 'Test: '],
+    [8, 1, lossProcess.lossTrain[iter - 1][1], 'Train: '],
+    [10, 1, '', '']
   ]
   seriesInOption[3] = {
     id: 'lossLegend',
     type: 'scatter',
     xAxisIndex: 1,
     yAxisIndex: 1,
+    data: lossLegend,
+    label: {
+      show: true,
+      fontWeight: 'bold',
+      formatter: (params) => {
+        let data = params.data;
+        if(data[3] === 'Iter: '){
+          return data[3] + data[2]
+        }else{
+          if(data[3]) {
+            return data[3] + data[2].toFixed(4)
+          }else{
+            return ''
+          }
+        }
+      }, 
+    },
+    emphasis: {
+      show: true,
+      formatter: (params) => {
+        let data = params.data;
+        return data[3]
+      }
+    },
+    itemStyle: {
+      shadowBlur: 10,
+      shadowColor: BAD_SHADOW_COLOR,
+      shadowOffsetY: 5,
+      color: (params) => {
+        let data = params.data;
+        if(data[3] === 'Train: '){
+          return 'rgb(129, 227, 238)'
+        }
+        if(data[3] === 'Test: '){
+          return 'rgb(251, 118, 123)'
+        }
+        return 'transparent'
+      }
+    },
+    symbolSize: 1,
   }
   echartOption.series = seriesInOption;
   myChart.setOption(echartOption);
 }
+// 绘制样本点
 function drawSamples(samples) {
   let data = samples.map((item) => {
     return [item.x, item.y, item.label]
   })
-  seriesInOption.push({
+  seriesInOption[0] = {
     id: 'samples scatter',
     type: "scatter",
-    xAxisIndex: 2,
-    yAxisIndex: 2,
+    xAxisIndex: 3,
+    yAxisIndex: 3,
     data: data,
     itemStyle: {
       shadowBlur: 10,
@@ -454,14 +494,23 @@ function drawSamples(samples) {
         align: 'left'
       }
     }
-  })
+  };
   echartOption.series = seriesInOption;
   myChart.setOption(echartOption);
 }
-reset(true);
+
+function drawNetwork(network) {
+  
+}
+function getAllWeights(network) {
+  console.log('hi')
+  console.log('network:', network);
+}
 generateData(true);
+reset(true);
+getAllWeights(network);
 drawSamples(trainData);
-oneStep();
+// oneStep();
 runTrain();
 // drawDatasetThumbnails();
 // initTutorial();
