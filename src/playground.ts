@@ -835,6 +835,9 @@ function updateDecisionBoundary(network: nn.Node[][], firstTime: boolean) {
       }
     }
   }
+  if(iter == 10) {
+    console.log('boundary', boundary);
+  }
 }
 
 function getLoss(network: nn.Node[][], dataPoints: Example2D[]): number {
@@ -929,11 +932,8 @@ function produceTrainData(){
 }
 function oneStep(): void {
   iter++;
-  console.log('trainData', trainData);
-  console.log('batchSize', state.batchSize,trainData.length)
   trainData.forEach((point, i) => {
     let input = constructInput(point.x, point.y);
-    console.log('input', input)
     nn.forwardProp(network, input);
     nn.backProp(network, point.label, nn.Errors.SQUARE);
     if ((i + 1) % state.batchSize === 0) {
@@ -958,7 +958,6 @@ export function getOutputWeights(network: nn.Node[][]): number[] {
       }
     }
   }
-  console.log('weights', weights)
   return weights;
 }
 

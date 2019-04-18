@@ -76,6 +76,20 @@ const GOOD_COLOR = new echarts.graphic.RadialGradient(0.4, 0.3, 1, [{
   offset: 1,
   color: 'rgb(25, 183, 207)'
 }]);
+const GOOD_COLOR1 = new echarts.graphic.RadialGradient(0.4, 0.3, 1, [{
+  offset: 0,
+  color: '#f95959'
+}, {
+  offset: 1,
+  color: '#455d7a'
+}]);
+const GOOD_COLOR2 = new echarts.graphic.RadialGradient(0.4, 0.3, 1, [{
+  offset: 0,
+  color: '#dae1e7'
+}, {
+  offset: 1,
+  color: '#dd6b4d'
+}]);
 const BAD_COLOR = new echarts.graphic.RadialGradient(0.4, 0.3, 1, [{
   offset: 0,
   color: 'rgb(251, 118, 123)'
@@ -94,17 +108,21 @@ window.addEventListener("resize", function () {
 });
 let echartOption = {
   backgroundColor: BACKGROUND_COLOR,
-  title: { text: 'BPNN' },
+  title: {
+    text: 'BPNN',
+    bottom: 0,
+    left: 30
+  },
+color: [BAD_COLOR, GOOD_COLOR, GOOD_COLOR1,GOOD_COLOR2],
   grid: [
-    { width: '55%', top: 30, left: 30, bottom: 30},
+    { width: '55%', top: 30, left: 30, bottom: 30 },
     { width: '30%', height: 10, top: 30, right: 30, },
     { width: '30%', height: '20%', top: 50, right: 30, },
-    
     { width: '30%', height: '65%', bottom: 30, right: 30 },
-  ], // top: '35%'
+  ],
   legend: {
-    left: '50%',
-    data:['+1', '-1', 'lossTrain', 'lossTest']
+    left: 30,
+    data: []
   },
   trigger: 'item',
   xAxis: [
@@ -115,7 +133,7 @@ let echartOption = {
   ],
   yAxis: [
     { gridIndex: 0, },
-    { gridIndex: 1, min: 1, max: 1, interval : 1, show: false},
+    { gridIndex: 1, min: 1, max: 1, interval: 1, show: false },
     { gridIndex: 2, },
     { gridIndex: 3, },
   ],
@@ -156,7 +174,7 @@ function reset(onStartup = false) {
     state.regularization, constructInputIds(), state.initZero);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
-  biggestLoss = lossTest > lossTrain ? lossTest: lossTrain;
+  biggestLoss = lossTest > lossTrain ? lossTest : lossTrain;
   lossProcess.lossTest.push([iter, lossTest]);
   lossProcess.lossTrain.push([iter, lossTrain]);
 };
@@ -307,9 +325,10 @@ function oneStep(): { iter: number, lossTest: number, lossTrain: number } {
     nn.backProp(network, point.label, nn.Errors.SQUARE);
     if ((i + 1) % state.batchSize === 0) {
       nn.updateWeights(network, state.learningRate, state.regularizationRate);
+      
     }
   });
-
+  drawNetwork(network);
   // Compute the loss.
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
@@ -382,7 +401,7 @@ function drawLoss(lossProcess) {
     smooth: true,
     xAxisIndex: 2,
     yAxisIndex: 2,
-    symbolSize:1,
+    symbolSize: 1,
     lineStyle: {
       color: 'rgb(129, 227, 238)'
     },
@@ -419,16 +438,16 @@ function drawLoss(lossProcess) {
       fontWeight: 'bold',
       formatter: (params) => {
         let data = params.data;
-        if(data[3] === 'Iter: '){
+        if (data[3] === 'Iter: ') {
           return data[3] + data[2]
-        }else{
-          if(data[3]) {
+        } else {
+          if (data[3]) {
             return data[3] + data[2].toFixed(4)
-          }else{
+          } else {
             return ''
           }
         }
-      }, 
+      },
     },
     emphasis: {
       show: true,
@@ -443,10 +462,10 @@ function drawLoss(lossProcess) {
       shadowOffsetY: 5,
       color: (params) => {
         let data = params.data;
-        if(data[3] === 'Train: '){
+        if (data[3] === 'Train: ') {
           return 'rgb(129, 227, 238)'
         }
-        if(data[3] === 'Test: '){
+        if (data[3] === 'Test: ') {
           return 'rgb(251, 118, 123)'
         }
         return 'transparent'
@@ -499,9 +518,126 @@ function drawSamples(samples) {
   myChart.setOption(echartOption);
 }
 
+// 绘制网络
 function drawNetwork(network) {
-  
+  let tempNodes = [];
+  let tempLinks = [];
+  let categories = [];
+
+  for (let i = 0; i < network.length; i++) {
+    categories.push({
+      name: '第 ' + (i + 1) + ' 层'
+    })
+  }
+
+  let legendData = echartOption.legend.data.concat(categories).filter((item, index, array) => {
+    return array.indexOf(item) === index;
+  })
+  echartOption.legend.data = legendData;
+
+  // 节点最多的layer的节点数
+  let biggestNumOfNode = 0;
+  network.forEach( (layer) => {
+    if(biggestNumOfNode < layer.length) {
+      biggestNumOfNode = layer.length;
+    }
+  })
+  let biggestHeight = (biggestNumOfNode-1) * 100;
+  // console.log('biggest: ', biggestNumOfNode);
+  for (let i = 0; i < network.length; i++) {
+    let currentLayer = network[i];
+    let numOfNode = currentLayer.length;
+    let eachHeight =biggestHeight/(numOfNode + 1)
+    for (let j = 0; j < currentLayer.length; j++) {
+      let currentNode = currentLayer[j];
+      let y = numOfNode === 1 ? biggestHeight /2 : Math.floor(biggestHeight / (numOfNode - 1)) * j;
+      
+      let weightsOfNode = ``
+      let outputLinks = currentNode.outputs;
+      for (let k = 0; k < outputLinks.length; k++) {
+        let tempLink = outputLinks[k];
+        weightsOfNode += `W${k + 1}: ${tempLink.weight.toFixed(3)}\n`
+        tempLinks.push({
+          source: tempLink.source.id,
+          target: tempLink.dest.id,
+          value: tempLink.weight,
+          lineStyle: {
+            width: Math.abs(tempLink.weight * 10)
+          },
+          label: {
+            show: true,
+            position: 'middle',
+            formatter: "W = " + tempLink.weight.toFixed(3),
+            backgroundColor:'rgba(255,255,255,0.3)',
+            borderRadius: 5,
+            padding: [10,10,10,10],
+            color: 'rgba(0,0,0,0.5)',
+          },
+          emphasis: {
+            show: true,
+            position: 'left',
+            formatter: "W = " + tempLink.weight.toFixed(3),
+          }
+        })
+      }
+
+      tempNodes.push({
+        id: currentNode.id,
+        name: currentNode.id,
+        category: '第 ' + (i + 1) + ' 层',
+        emphasis: {
+          label: {
+            show: true,
+            formatter: `\n第 ${i + 1} 层\n第 ${j + 1} 节点\n${weightsOfNode}`,
+            align: 'left',
+            position: 'right',
+            backgroundColor:'rgba(0,23,11,0.3)',
+            borderRadius: 5,
+            padding: [0,10,0,10],
+            color: 'rgba(255,255,255,0.9)',
+            lineHeight: 15
+          }
+        },
+        symbolSize: 20,
+        x: i * 100,
+        y: j * 100, // numOfNode === biggestHeight?j * 100: (j + 1) * eachHeight, // y
+      })
+    }
+    seriesInOption[4] = {
+      type: 'graph',
+      layout: 'none',
+      data: tempNodes,
+      links: tempLinks,
+      lineStyle: {
+        color: 'source'
+      },
+      itemStyle: {
+        shadowBlur: 10,
+        shadowColor: BAD_SHADOW_COLOR,
+        shadowOffsetY:5,
+        // color: GOOD_COLOR
+      },
+      emphasis: {
+        label: {
+          formatter: (params) => {
+            return 'hi';
+          }
+        }
+      },
+      categories: categories,
+      roam: true,
+      focusNodeAdjacency: true,
+      width: '55%',
+      top: 80,
+      left: 30,
+      bottom: 80
+    }
+  }
+  // console.log('result', categories, JSON.stringify(tempNodes), JSON.stringify(tempLinks))
+  echartOption.series = seriesInOption;
+  myChart.setOption(echartOption)
 }
+
 function getAllWeights(network) {
   console.log('hi')
   console.log('network:', network);
@@ -510,6 +646,7 @@ generateData(true);
 reset(true);
 getAllWeights(network);
 drawSamples(trainData);
+drawNetwork(network);
 // oneStep();
 runTrain();
 // drawDatasetThumbnails();
