@@ -152,15 +152,23 @@ function constructInput(x: number, y: number): number[] {
 
 
 
-
+// 所有的loss
 let lossProcess = {
   lossTest: [],
   lossTrain: []
 };
-let biggestLoss = 0;
+let allNodeIds = []
+function getAllNodeIds(network) {
+  allNodeIds = [];
+  for(let i = 0;i< network.length;i++){
+    let currentLayer = network[i];
+    for(let i = 0;i< currentLayer.length;i++){
+      allNodeIds.push(currentLayer[i].id)
+    }
+  }
+}
 function reset(onStartup = false) {
   state.serialize();
-  player.pause();
 
   let suffix = state.numHiddenLayers !== 1 ? "s" : "";
 
@@ -172,9 +180,9 @@ function reset(onStartup = false) {
     nn.Activations.LINEAR : nn.Activations.TANH;
   network = nn.buildNetwork(shape, state.activation, outputActivation,
     state.regularization, constructInputIds(), state.initZero);
+  getAllNodeIds(network);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
-  biggestLoss = lossTest > lossTrain ? lossTest : lossTrain;
   lossProcess.lossTest.push([iter, lossTest]);
   lossProcess.lossTrain.push([iter, lossTrain]);
 };
@@ -190,56 +198,7 @@ function getLoss(network: nn.Node[][], dataPoints: Example2D[]): number {
   return loss / dataPoints.length;
 }
 
-class Player {
-  private timerIndex = 0;
-  private isPlaying = false;
-  private callback: (isPlaying: boolean) => void = null;
 
-  /** Plays/pauses the player. */
-  playOrPause() {
-    if (this.isPlaying) {
-      this.isPlaying = false;
-      this.pause();
-    } else {
-      this.isPlaying = true;
-      if (iter === 0) {
-        // simulationStarted();
-      }
-      this.play();
-    }
-  }
-
-  onPlayPause(callback: (isPlaying: boolean) => void) {
-    this.callback = callback;
-  }
-
-  play() {
-    this.pause();
-    this.isPlaying = true;
-    if (this.callback) {
-      this.callback(this.isPlaying);
-    }
-    this.start(this.timerIndex);
-  }
-
-  pause() {
-    this.timerIndex++;
-    this.isPlaying = false;
-    if (this.callback) {
-      this.callback(this.isPlaying);
-    }
-  }
-
-  private start(localTimerIndex: number) {
-    d3.timer(() => {
-      if (localTimerIndex < this.timerIndex) {
-        return true;  // Done.
-      }
-      oneStep();
-      return false;  // Not done.
-    }, 0);
-  }
-}
 
 let state = State.deserializeState();
 
@@ -261,7 +220,6 @@ let testData: Example2D[] = [];
 let network: nn.Node[][] = null;
 let lossTrain = 0;
 let lossTest = 0;
-let player = new Player();
 
 function constructInputIds(): string[] {
   let result: string[] = [];
@@ -271,6 +229,102 @@ function constructInputIds(): string[] {
     }
   }
   return result;
+}
+
+// 所有背景所对应的canvas
+let allBackgroundCanvas = {}
+// 将对应的canvas转换成图片
+let allBackgroundImages = {};
+/**
+ * Given a neural network, it asks the network for the output (prediction)
+ * of every node in the network using inputs sampled on a square grid.
+ * It returns a map where each key is the node ID and the value is a square
+ * matrix of the outputs of the network for each input in the grid respectively.
+ */
+function updateDecisionBoundary(network: nn.Node[][], firstTime: boolean) {
+  if (firstTime) {
+    boundary = {};
+    nn.forEachNode(network, true, node => {
+      boundary[node.id] = new Array(DENSITY);
+    });
+    // Go through all predefined inputs.
+    for (let nodeId in INPUTS) {
+      boundary[nodeId] = new Array(DENSITY);
+    }
+  }
+  let xScale = d3.scale.linear().domain([0, DENSITY - 1]).range(xDomain);
+  let yScale = d3.scale.linear().domain([DENSITY - 1, 0]).range(xDomain);
+
+  let i = 0, j = 0;
+  for (i = 0; i < DENSITY; i++) {
+    if (firstTime) {
+      nn.forEachNode(network, true, node => {
+        boundary[node.id][i] = new Array(DENSITY);
+      });
+      // Go through all predefined inputs.
+      for (let nodeId in INPUTS) {
+        boundary[nodeId][i] = new Array(DENSITY);
+      }
+    }
+    for (j = 0; j < DENSITY; j++) {
+      // 1 for points inside the circle, and 0 for points outside the circle.
+      let x = xScale(i);
+      let y = yScale(j);
+      let input = constructInput(x, y);
+      nn.forwardProp(network, input);
+      nn.forEachNode(network, true, node => {
+        boundary[node.id][i][j] = node.output;
+      });
+      if (firstTime) {
+        // Go through all predefined inputs.
+        for (let nodeId in INPUTS) {
+          boundary[nodeId][i][j] = INPUTS[nodeId].f(x, y);
+        }
+      }
+    }
+  }
+  if(iter == 10) {
+    console.log('boundary', boundary);
+  }
+}
+
+// putImageData
+// toDataURL
+function updateBackground(data: number[][], discretize: boolean): void {
+  for(let i = 0;i< allNodeIds.length;i++){
+    let id = allNodeIds[i]
+    if(!allBackgroundCanvas[id]){
+      allBackgroundImages[id] = document.createElement("canvas");
+    }
+  }
+  
+  let dx = data[0].length;
+  let dy = data.length;
+
+  if (dx !== this.numSamples || dy !== this.numSamples) {
+    throw new Error(
+        "The provided data matrix must be of size " +
+        "numSamples X numSamples");
+  }
+
+  // Compute the pixel colors; scaled by CSS.
+  let context = (this.canvas.node() as HTMLCanvasElement).getContext("2d");
+  let image = context.createImageData(dx, dy);
+
+  for (let y = 0, p = -1; y < dy; ++y) {
+    for (let x = 0; x < dx; ++x) {
+      let value = data[x][y];
+      if (discretize) {
+        value = (value >= 0 ? 1 : -1);
+      }
+      let c = d3.rgb(this.color(value));
+      image.data[++p] = c.r;
+      image.data[++p] = c.g;
+      image.data[++p] = c.b;
+      image.data[++p] = 160;
+    }
+  }
+  context.putImageData(image, 0, 0);
 }
 
 
@@ -588,7 +642,7 @@ function drawNetwork(network) {
         emphasis: {
           label: {
             show: true,
-            formatter: `\n第 ${i + 1} 层\n第 ${j + 1} 节点\n${weightsOfNode}`,
+            formatter: `\nID: ${currentNode.id}\n第 ${i + 1} 层\n第 ${j + 1} 节点\n${weightsOfNode}`,
             align: 'left',
             position: 'right',
             backgroundColor:'rgba(0,23,11,0.3)',
@@ -642,16 +696,11 @@ function getAllWeights(network) {
   console.log('hi')
   console.log('network:', network);
 }
+
+
 generateData(true);
 reset(true);
 getAllWeights(network);
 drawSamples(trainData);
 drawNetwork(network);
-// oneStep();
 runTrain();
-// drawDatasetThumbnails();
-// initTutorial();
-// makeGUI();
-// generateData(true);
-// reset(true);
-// hideControls();
